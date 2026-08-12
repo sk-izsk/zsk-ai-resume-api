@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = Field(3600, alias="RATE_LIMIT_WINDOW_SECONDS")
     cache_ttl_seconds: int = Field(604800, alias="CACHE_TTL_SECONDS")
     rate_limit_enabled: bool = Field(True, alias="RATE_LIMIT_ENABLED")
-    cache_version: str = Field("compact-profile-v1", alias="CACHE_VERSION")
+    cache_version: str = Field("professional-first-v2", alias="CACHE_VERSION")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

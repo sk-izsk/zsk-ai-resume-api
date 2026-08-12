@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.cache import get_cached_answer, set_cached_answer
 from app.config import get_settings
-from app.groq_client import RateLimitError, ask_groq
+from app.groq_client import RateLimitError, ask_groq, retry_after_seconds
 from app.profile import fetch_profile
 from app.rate_limit import check_rate_limit
 from app.redis_client import RedisClient
@@ -62,10 +62,12 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
     try:
         ai_result = await ask_groq(settings, profile, payload.message)
     except RateLimitError as error:
+        reset_in_seconds = retry_after_seconds(str(error))
         raise HTTPException(
             status_code=429,
             detail={
                 "message": "Groq model token limit reached. Try again later.",
+                **({"reset_in_seconds": reset_in_seconds} if reset_in_seconds is not None else {}),
                 "provider_error": str(error),
             },
         ) from error
