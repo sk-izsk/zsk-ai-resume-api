@@ -1,4 +1,5 @@
 import json
+import re
 
 from groq import AsyncGroq, RateLimitError
 
@@ -25,19 +26,22 @@ Keep answers concise, professional, and specific. Make sure to save tokens and d
 When useful, mention the exact project, skill, or experience item that supports the answer.
 
 Evidence order matters:
-1. For questions about whether Zeeshan is good at a skill, role, or technology, check professional experience first.
-2. Then use portfolio/personal projects as supporting evidence.
-3. Then use skill ratings only as secondary support.
-4. Do not imply that professional experience is missing just because projects are not labeled professional.
-5. Treat the "experience" section as professional work history. Treat the "projects" section as portfolio/project evidence unless a company/employer is explicitly stated.
-6. If professional experience supports the answer, mention it before personal or portfolio projects.
+1. Professional experience is always primary evidence.
+2. For any question about a skill, role, technology, or "strongest projects", check professional_experience first.
+3. If professional_experience contains relevant evidence, mention it before any portfolio_projects.
+4. Then use portfolio_projects as supporting proof.
+5. Then use skill ratings only as secondary support.
+6. Never imply professional experience is missing because portfolio_projects are not labeled professional.
+7. Treat professional_experience as professional work history. Treat portfolio_projects as personal/portfolio evidence unless a company/employer is explicitly stated.
 
+#  EXAMPLES
 For skill questions, answer with this structure:
 - Start with a direct yes/no/qualified answer.
 - Mention the most relevant professional role/company first.
-- Include 1-2 concrete professional achievements or responsibilities from experience.highlights.
+- Include 1-2 concrete professional achievements or responsibilities from professional_experience.highlights.
 - Then mention 1-3 portfolio projects as extra proof.
 - Avoid vague answers like "he has experience at Company X" without saying what he achieved there.
+- If the user asks for "best/strongest React projects", still start with professional React work first, then list portfolio projects.
 
 # FALLBACK
 
@@ -58,6 +62,15 @@ def _matches_any(text: str, words: list[str]) -> bool:
     return any(word in text for word in words)
 
 
+def retry_after_seconds(message: str) -> int | None:
+    match = re.search(r"try again in (?=\d)(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?", message)
+    if not match:
+        return None
+
+    hours, minutes, seconds = match.groups(default="0")
+    return int(hours) * 3600 + int(minutes) * 60 + int(float(seconds))
+
+
 def compact_profile(profile: dict, message: str) -> dict:
     text = message.lower()
     wants_blog = _matches_any(text, ["blog", "article", "writing", "hashnode"])
@@ -71,7 +84,7 @@ def compact_profile(profile: dict, message: str) -> dict:
             "technical": profile.get("skills", {}).get("technical", []),
             "categories": profile.get("skills", {}).get("categories", {}),
         },
-        "experience": [
+        "professional_experience": [
             {
                 "company": item.get("company"),
                 "position": item.get("position"),
@@ -81,7 +94,7 @@ def compact_profile(profile: dict, message: str) -> dict:
             }
             for item in profile.get("experience", [])
         ],
-        "projects": [
+        "portfolio_projects": [
             {
                 "title": item.get("title"),
                 "category": item.get("category"),
@@ -134,4 +147,4 @@ async def ask_groq(settings: Settings, profile: dict, message: str) -> dict:
     return json.loads(content)
 
 
-__all__ = ["RateLimitError", "ask_groq", "compact_profile"]
+__all__ = ["RateLimitError", "ask_groq", "compact_profile", "retry_after_seconds"]

@@ -1,6 +1,6 @@
 import unittest
 
-from app.groq_client import compact_profile
+from app.groq_client import compact_profile, retry_after_seconds
 
 
 class CompactProfileTest(unittest.TestCase):
@@ -18,13 +18,18 @@ class CompactProfileTest(unittest.TestCase):
 
         compact = compact_profile(profile, "is he good at react?")
 
-        self.assertIn("experience", compact)
-        self.assertIn("projects", compact)
+        self.assertIn("professional_experience", compact)
+        self.assertIn("portfolio_projects", compact)
         self.assertNotIn("blog", compact)
         self.assertNotIn("education", compact)
         self.assertNotIn("contact", compact)
-        self.assertEqual(len(compact["experience"][0]["highlights"]), 4)
-        self.assertEqual(len(compact["projects"][0]["tags"]), 10)
+        self.assertEqual(len(compact["professional_experience"][0]["highlights"]), 4)
+        self.assertEqual(len(compact["portfolio_projects"][0]["tags"]), 10)
+
+    def test_parses_groq_retry_after_seconds(self):
+        self.assertEqual(retry_after_seconds("Please try again in 2h3m4.5s."), 7384)
+        self.assertEqual(retry_after_seconds("Please try again in 3m16.992s."), 196)
+        self.assertIsNone(retry_after_seconds("No retry hint"))
 
 
 if __name__ == "__main__":
