@@ -1,0 +1,20 @@
+from pydantic import BaseModel, Field
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=2, max_length=800)
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    sources: list[str] = []
+    blocked: bool = False
+    remaining: int
+    reset_in_seconds: int
+    cached: bool = False
+
+
+class RateLimitState(BaseModel):
+    allowed: bool
+    remaining: int
+    reset_in_seconds: int
