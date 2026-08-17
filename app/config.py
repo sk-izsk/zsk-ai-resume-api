@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     groq_api_key: str = Field(..., alias="GROQ_API_KEY")
-    groq_model: str = Field("llama-3.3-70b-versatile", alias="GROQ_MODEL")
+    groq_model: str = Field("openai/gpt-oss-120b", alias="GROQ_MODEL")
     upstash_redis_rest_url: str = Field(..., alias="UPSTASH_REDIS_REST_URL")
     upstash_redis_rest_token: str = Field(..., alias="UPSTASH_REDIS_REST_TOKEN")
     portfolio_profile_url: str = Field(..., alias="PORTFOLIO_PROFILE_URL")

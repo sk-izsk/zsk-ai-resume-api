@@ -70,7 +70,7 @@ Set these environment variables in Render:
 
 ```env
 GROQ_API_KEY=
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-120b
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 PORTFOLIO_PROFILE_URL=https://izsk.netlify.app/resume-ai-profile.json
