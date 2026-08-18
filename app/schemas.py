@@ -12,6 +12,7 @@ class ChatResponse(BaseModel):
     remaining: int
     reset_in_seconds: int
     cached: bool = False
+    provider: str | None = None
 
 
 class RateLimitState(BaseModel):

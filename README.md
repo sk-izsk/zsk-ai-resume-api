@@ -71,6 +71,9 @@ Set these environment variables in Render:
 ```env
 GROQ_API_KEY=
 GROQ_MODEL=openai/gpt-oss-120b
+PRIMARY_LLM_PROVIDER=groq
+GOOGLE_API_KEY=
+GOOGLE_MODEL=gemini-3.6-flash
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 PORTFOLIO_PROFILE_URL=https://izsk.netlify.app/resume-ai-profile.json
