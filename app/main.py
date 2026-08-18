@@ -1,9 +1,9 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.cache import get_cached_answer, set_cached_answer
 from app.config import get_settings
-from app.groq_client import RateLimitError, ask_groq, retry_after_seconds
+from app.llm import LLMUnavailableError, ask_llm, provider_order
 from app.profile import fetch_profile
 from app.rate_limit import check_rate_limit
 from app.redis_client import RedisClient
@@ -20,6 +20,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["X-LLM-Provider"],
 )
 
 
@@ -32,11 +33,23 @@ def client_ip(request: Request) -> str:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    primary, fallback = provider_order(settings)
+    try:
+        await redis.command("PING")
+        cache = "connected"
+    except Exception:
+        cache = "error"
+
+    return {
+        "status": "ok",
+        "primary_provider": primary,
+        "fallback_provider": fallback,
+        "cache": cache,
+    }
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
+async def chat(payload: ChatRequest, request: Request, response: Response) -> ChatResponse:
     limit = await check_rate_limit(redis, settings, client_ip(request))
     if not limit.allowed:
         raise HTTPException(
@@ -50,6 +63,7 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
 
     cached = await get_cached_answer(redis, payload.message, settings.cache_version)
     if cached:
+        response.headers["X-LLM-Provider"] = cached.provider or "cache"
         return cached.model_copy(
             update={
                 "remaining": limit.remaining,
@@ -60,24 +74,23 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
 
     profile = await fetch_profile(settings)
     try:
-        ai_result = await ask_groq(settings, profile, payload.message)
-    except RateLimitError as error:
-        reset_in_seconds = retry_after_seconds(str(error))
+        ai_result, provider = await ask_llm(settings, profile, payload.message)
+    except LLMUnavailableError as error:
         raise HTTPException(
-            status_code=429,
+            status_code=503,
             detail={
-                "message": "Groq model token limit reached. Try again later.",
-                **({"reset_in_seconds": reset_in_seconds} if reset_in_seconds is not None else {}),
-                "provider_error": str(error),
+                "message": "AI service temporarily unavailable. Please try again shortly.",
             },
         ) from error
 
-    response = ChatResponse(
+    response.headers["X-LLM-Provider"] = provider
+    chat_response = ChatResponse(
         answer=str(ai_result.get("answer", "")).strip(),
         sources=list(ai_result.get("sources", [])),
         blocked=bool(ai_result.get("blocked", False)),
+        provider=provider,
         remaining=limit.remaining,
         reset_in_seconds=limit.reset_in_seconds,
     )
-    await set_cached_answer(redis, payload.message, response, settings.cache_ttl_seconds, settings.cache_version)
-    return response
+    await set_cached_answer(redis, payload.message, chat_response, settings.cache_ttl_seconds, settings.cache_version)
+    return chat_response

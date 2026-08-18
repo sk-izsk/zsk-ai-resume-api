@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,6 +8,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     groq_api_key: str = Field(..., alias="GROQ_API_KEY")
     groq_model: str = Field("openai/gpt-oss-120b", alias="GROQ_MODEL")
+    # Switches primary/fallback order: groq -> Google fallback, google -> Groq fallback.
+    primary_llm_provider: Literal["groq", "google"] = Field("groq", alias="PRIMARY_LLM_PROVIDER")
+    google_api_key: str | None = Field(None, alias="GOOGLE_API_KEY")
+    google_model: str = Field("gemini-3.6-flash", alias="GOOGLE_MODEL")
     upstash_redis_rest_url: str = Field(..., alias="UPSTASH_REDIS_REST_URL")
     upstash_redis_rest_token: str = Field(..., alias="UPSTASH_REDIS_REST_TOKEN")
     portfolio_profile_url: str = Field(..., alias="PORTFOLIO_PROFILE_URL")
