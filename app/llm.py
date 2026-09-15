@@ -32,19 +32,26 @@ async def ask_google(settings: Settings, profile: dict, message: str) -> dict:
     if not settings.google_api_key:
         raise RuntimeError("GOOGLE_API_KEY is not configured")
 
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
 
-    genai.configure(api_key=settings.google_api_key)
-    model = genai.GenerativeModel(settings.google_model, system_instruction=SYSTEM_PROMPT)
-    response = await model.generate_content_async(
-        build_user_prompt(profile, message),
-        generation_config={
-            "response_mime_type": "application/json",
-            "temperature": 0.2,
-        },
-        request_options={"timeout": 30},
+    client = genai.Client(
+        api_key=settings.google_api_key,
+        http_options=types.HttpOptions(timeout=30_000),
     )
-    return json.loads(response.text or "{}")
+    try:
+        chat = client.aio.chats.create(
+            model=settings.google_model,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                temperature=0.2,
+            ),
+        )
+        response = await chat.send_message(build_user_prompt(profile, message))
+        return json.loads(response.text or "{}")
+    finally:
+        await client.aio.aclose()
 
 
 async def _ask_provider(provider: ProviderName, settings: Settings, profile: dict, message: str) -> dict:
