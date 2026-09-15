@@ -66,6 +66,12 @@ Start command:
 uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
+or 
+
+```bash
+python -m uvicorn app.main:app --reload --port 8000 
+```
+
 Set these environment variables in Render:
 
 ```env
