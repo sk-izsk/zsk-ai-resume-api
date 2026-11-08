@@ -112,3 +112,6 @@ The API never trusts `X-Forwarded-For`, which any client can set. It uses Cloudf
 Until `NETLIFY_PROXY_SECRET` is set, the Netlify header is accepted unverified and a warning is logged.
 
 `GET /health` is cheap and doesn't touch Redis; `GET /health?deep=true` also checks Redis.
+
+`GET /usage` returns the visitor's `remaining`, `reset_in_seconds` and `allowed` without using a request, so
+the site can show the right count when the chat opens.

@@ -83,6 +83,26 @@ def _state(settings: Settings, answers: int, ttl: int, allowed: bool = True) -> 
     )
 
 
+async def peek_usage(redis: RedisClient, settings: Settings, ip: str) -> RateLimitState:
+    """What this IP has left, without using anything. Lets the site show the right count on open."""
+    if not settings.rate_limit_enabled:
+        return _state(settings, 0, 0)
+
+    try:
+        answers, answer_ttl, refusals = await redis.pipeline(
+            ["GET", _answer_key(ip)], ["TTL", _answer_key(ip)], ["GET", _refusal_key(ip)]
+        )
+        answers, refusals = int(answers or 0), int(refusals or 0)
+        answer_ttl = int(answer_ttl) if answers else 0
+    except Exception as error:
+        logger.warning("Redis rate limit failed, using in-memory limit: %s", error)
+        answers, answer_ttl = _local_read(_answer_key(ip))
+        refusals = _local_read(_refusal_key(ip))[0]
+
+    allowed = answers < settings.rate_limit_max_requests and refusals < settings.rate_limit_max_refusals
+    return _state(settings, answers, answer_ttl, allowed=allowed)
+
+
 async def reserve_request(redis: RedisClient, settings: Settings, ip: str) -> RateLimitState:
     """Holds one answer slot and one refusal slot for this request, or refuses it if either is full."""
     if not settings.rate_limit_enabled:
