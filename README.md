@@ -79,7 +79,7 @@ GROQ_API_KEY=
 GROQ_MODEL=openai/gpt-oss-120b
 PRIMARY_LLM_PROVIDER=google
 GOOGLE_API_KEY=
-GOOGLE_MODEL=gemini-3.6-flash
+GOOGLE_MODEL=gemini-3.5-flash-lite
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 PORTFOLIO_PROFILE_URL=https://izsk.netlify.app/resume-ai-profile.json
@@ -105,7 +105,7 @@ The API never trusts `X-Forwarded-For`, which any client can set. It uses Cloudf
 `X-Nf-Client-Connection-Ip`. That header is only trusted when Netlify signed the request:
 
 1. Pick a long random secret.
-2. In Netlify, add it as the environment variable `ASK_AI_PROXY_SECRET` (the proxy rule in the site's
+2. In Netlify, add it as the environment variable `ASK_AI_PROXY_SIGNATURE` (the proxy rule in the site's
    `netlify.toml` signs with it).
 3. In Render, set `NETLIFY_PROXY_SECRET` to the same value.
 

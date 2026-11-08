@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     # Gemini answers first and Groq is the fallback; set PRIMARY_LLM_PROVIDER=groq to swap them.
     primary_llm_provider: Literal["groq", "google"] = Field("google", alias="PRIMARY_LLM_PROVIDER")
     google_api_key: str | None = Field(None, alias="GOOGLE_API_KEY")
-    google_model: str = Field("gemini-3.6-flash", alias="GOOGLE_MODEL")
+    google_model: str = Field("gemini-3.5-flash-lite", alias="GOOGLE_MODEL")
     upstash_redis_rest_url: str = Field(..., alias="UPSTASH_REDIS_REST_URL")
     upstash_redis_rest_token: str = Field(..., alias="UPSTASH_REDIS_REST_TOKEN")
     portfolio_profile_url: str = Field(..., alias="PORTFOLIO_PROFILE_URL")
