@@ -1,10 +1,10 @@
 from pydantic import BaseModel, Field
 
-# Kept in step with the FALLBACK answer in SYSTEM_PROMPT (app/groq_client.py).
-REFUSAL_PREFIX = "This is outside my expertise"
+from app.prompt import REFUSAL_PREFIX
 
 
 class ChatRequest(BaseModel):
+    # Room for a pasted job description ("is he a fit for this role?"), about 2.5k tokens at most.
     message: str = Field(..., min_length=2, max_length=10_000)
 
 

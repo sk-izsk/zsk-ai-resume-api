@@ -1,6 +1,6 @@
 import unittest
 
-from app.groq_client import compact_profile, retry_after_seconds
+from app.prompt import REFUSAL_PREFIX, SYSTEM_PROMPT, build_user_prompt, compact_profile
 
 
 class CompactProfileTest(unittest.TestCase):
@@ -38,11 +38,17 @@ class CompactProfileTest(unittest.TestCase):
         self.assertEqual(len(titles), 4)
         self.assertEqual(titles[0], "Smart AI")
 
-    def test_parses_groq_retry_after_seconds(self):
-        self.assertEqual(retry_after_seconds("Please try again in 2h3m4.5s."), 7384)
-        self.assertEqual(retry_after_seconds("Please try again in 3m16.992s."), 196)
-        self.assertIsNone(retry_after_seconds("No retry hint"))
+    def test_french_questions_match_english_tags(self):
+        projects = [{"title": f"Plain {i}", "tags": ["CSS"]} for i in range(6)]
+        projects.append({"title": "Smart AI", "tags": ["AI"]})
 
+        titles = [p["title"] for p in compact_profile({"projects": projects}, "Quels projets IA ?")["portfolio_projects"]]
+
+        self.assertEqual(titles[0], "Smart AI")
+
+    def test_prompt_carries_the_refusal_sentence_and_the_question(self):
+        self.assertIn(REFUSAL_PREFIX, SYSTEM_PROMPT)
+        self.assertTrue(build_user_prompt({}, "react?").endswith("USER_QUESTION:\nreact?"))
 
 if __name__ == "__main__":
     unittest.main()

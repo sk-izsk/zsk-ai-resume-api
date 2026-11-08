@@ -37,9 +37,10 @@ class FakeRedis:
             self.values[key] = self.values.get(key, 0) - 1
             return self.values[key]
         if name == "DEL":
-            self.values.pop(key, None)
-            self.ttls.pop(key, None)
-            return 1
+            for name_ in parts:
+                self.values.pop(name_, None)
+                self.ttls.pop(name_, None)
+            return len(parts)
         if name == "GET":
             return str(self.values[key]) if key in self.values else None
         if name == "EXPIRE":
@@ -51,9 +52,15 @@ class FakeRedis:
             return "OK"
         raise AssertionError(f"Unexpected command: {name}")
 
+    async def pipeline(self, *commands):
+        return [await self.command(*command) for command in commands]
+
 
 class DownRedis:
     async def command(self, *parts):
+        raise ConnectionError("redis host not found")
+
+    async def pipeline(self, *commands):
         raise ConnectionError("redis host not found")
 
 

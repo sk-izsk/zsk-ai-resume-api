@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 os.environ.setdefault("GROQ_API_KEY", "test")
 os.environ.setdefault("UPSTASH_REDIS_REST_URL", "https://example.com")
@@ -15,7 +15,7 @@ from test_rate_limit import FakeRedis, make_settings  # noqa: E402
 
 
 async def no_profile(settings):
-    return {}
+    return {}, "test-profile"
 
 
 class ChatLimitTest(unittest.TestCase):
@@ -25,7 +25,7 @@ class ChatLimitTest(unittest.TestCase):
         patches = [
             patch.object(main, "redis", FakeRedis()),
             patch.object(main, "settings", make_settings(CACHE_VERSION="test")),
-            patch.object(main, "fetch_profile", no_profile),
+            patch.object(main, "get_profile", no_profile),
         ]
         for item in patches:
             item.start()
@@ -84,6 +84,18 @@ class ChatLimitTest(unittest.TestCase):
         response = self.ask("four?", {"answer": "ok", "blocked": False})
 
         self.assertEqual(response.status_code, 429)
+
+
+
+class WarmCacheTest(unittest.IsolatedAsyncioTestCase):
+    async def test_stops_at_the_first_failure_instead_of_spending_more_requests(self):
+        cached = main.ChatResponse(answer="ok", remaining=0, reset_in_seconds=0, cached=True)
+        answer = AsyncMock(side_effect=[cached, LLMUnavailableError("out of quota"), cached])
+
+        with patch.object(main, "answer_question", answer):
+            await main.warm_cache()
+
+        self.assertEqual(answer.await_count, 2)
 
 
 if __name__ == "__main__":

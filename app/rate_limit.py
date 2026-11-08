@@ -37,38 +37,42 @@ def _local_read(key: str) -> tuple[int, int]:
     return (count, int(left)) if left > 0 and count > 0 else (0, 0)
 
 
+def _local_add(key: str, change: int, window: int) -> int:
+    count, ttl = _local_read(key)
+    count = max(count + change, 0)
+    _local[key] = (count, time.monotonic() + (ttl or window))
+    return count
+
+
 async def _incr(redis: RedisClient, key: str, window: int) -> tuple[int, int]:
     try:
-        count = int(await redis.command("INCR", key))
-        if count == 1:
+        count, ttl = await redis.pipeline(["INCR", key], ["TTL", key])
+        if int(ttl) < 0:
             await redis.command("EXPIRE", key, window)
-        return count, int(await redis.command("TTL", key))
+            ttl = window
+        return int(count), int(ttl)
     except Exception as error:
         logger.warning("Redis rate limit failed, using in-memory limit: %s", error)
-        count, ttl = _local_read(key)
-        ttl = ttl or window
-        _local[key] = (count + 1, time.monotonic() + ttl)
-        return count + 1, ttl
+        return _local_add(key, 1, window), _local_read(key)[1]
 
 
-async def _decr(redis: RedisClient, key: str) -> None:
+async def _release(redis: RedisClient, keys: list[str], read_key: str) -> tuple[int, int]:
+    """DECR each key and read read_key's count and TTL, all in one round trip."""
     try:
+        *counts, value, ttl = await redis.pipeline(
+            *[["DECR", key] for key in keys], ["GET", read_key], ["TTL", read_key]
+        )
         # A key that expired mid-request would go negative and lose its TTL, so drop it instead.
-        if int(await redis.command("DECR", key)) <= 0:
-            await redis.command("DEL", key)
+        emptied = [key for key, count in zip(keys, counts) if int(count) <= 0]
+        if emptied:
+            await redis.command("DEL", *emptied)
+        count = max(int(value or 0), 0)
+        return count, int(ttl) if count else 0
     except Exception as error:
         logger.warning("Redis rate limit failed, using in-memory limit: %s", error)
-        count, ttl = _local_read(key)
-        _local[key] = (max(count - 1, 0), time.monotonic() + ttl)
-
-
-async def _read(redis: RedisClient, key: str) -> tuple[int, int]:
-    try:
-        count = int(await redis.command("GET", key) or 0)
-        return count, int(await redis.command("TTL", key)) if count else 0
-    except Exception as error:
-        logger.warning("Redis rate limit failed, using in-memory limit: %s", error)
-        return _local_read(key)
+        for key in keys:
+            _local_add(key, -1, 0)
+        return _local_read(read_key)
 
 
 def _state(settings: Settings, answers: int, ttl: int, allowed: bool = True) -> RateLimitState:
@@ -87,14 +91,13 @@ async def reserve_request(redis: RedisClient, settings: Settings, ip: str) -> Ra
     window = settings.rate_limit_window_seconds
     answers, answer_ttl = await _incr(redis, _answer_key(ip), window)
     if answers > settings.rate_limit_max_requests:
-        await _decr(redis, _answer_key(ip))
+        await _release(redis, [_answer_key(ip)], _answer_key(ip))
         return _state(settings, answers - 1, answer_ttl, allowed=False)
 
     # Taken only after the answer slot, so requests over the answer limit never crowd out refusal slots.
     refusals, refusal_ttl = await _incr(redis, _refusal_key(ip), window)
     if refusals > settings.rate_limit_max_refusals:
-        await _decr(redis, _refusal_key(ip))
-        await _decr(redis, _answer_key(ip))
+        await _release(redis, [_refusal_key(ip), _answer_key(ip)], _answer_key(ip))
         return _state(settings, answers - 1, refusal_ttl, allowed=False)
 
     return _state(settings, answers, answer_ttl)
@@ -105,10 +108,10 @@ async def settle_request(redis: RedisClient, settings: Settings, ip: str, outcom
     if not settings.rate_limit_enabled:
         return _state(settings, 0, 0)
 
-    if outcome != "answer":
-        await _decr(redis, _answer_key(ip))
-    if outcome != "refusal":
-        await _decr(redis, _refusal_key(ip))
-
-    answers, ttl = await _read(redis, _answer_key(ip))
+    unused = {
+        "answer": [_refusal_key(ip)],
+        "refusal": [_answer_key(ip)],
+        "failed": [_answer_key(ip), _refusal_key(ip)],
+    }[outcome]
+    answers, ttl = await _release(redis, unused, _answer_key(ip))
     return _state(settings, answers, ttl)

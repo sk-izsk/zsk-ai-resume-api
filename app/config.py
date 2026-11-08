@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     # Off-topic questions don't use up answers, but still cost tokens, so they get their own higher cap.
     rate_limit_max_refusals: int = Field(10, alias="RATE_LIMIT_MAX_REFUSALS")
     cache_ttl_seconds: int = Field(604800, alias="CACHE_TTL_SECONDS")
+    # How long the downloaded profile is reused before it is fetched again.
+    profile_ttl_seconds: int = Field(900, alias="PROFILE_TTL_SECONDS")
+    # Same value as the Netlify proxy rule's signing secret; lets the API trust Netlify's client IP header.
+    netlify_proxy_secret: str | None = Field(None, alias="NETLIFY_PROXY_SECRET")
     rate_limit_enabled: bool = Field(True, alias="RATE_LIMIT_ENABLED")
     cache_version: str = Field("professional-first-v2", alias="CACHE_VERSION")
 
