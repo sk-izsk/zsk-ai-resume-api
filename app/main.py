@@ -11,9 +11,9 @@ from app.config import get_settings
 from app.llm import LLMUnavailableError, ask_llm, provider_order
 from app.profile import get_profile
 from app.prompt import PROMPT_FINGERPRINT, SUGGESTED_QUESTIONS
-from app.rate_limit import Outcome, reserve_request, settle_request
+from app.rate_limit import Outcome, peek_usage, reserve_request, settle_request
 from app.redis_client import RedisClient
-from app.schemas import ChatRequest, ChatResponse
+from app.schemas import ChatRequest, ChatResponse, RateLimitState
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -72,6 +72,12 @@ async def health(deep: bool = False) -> dict[str, str]:
         except Exception:
             status["cache"] = "error"
     return status
+
+
+@app.get("/usage", response_model=RateLimitState)
+async def usage(request: Request) -> RateLimitState:
+    """The visitor's remaining requests, read without using one, so the site remembers across reloads."""
+    return await peek_usage(redis, settings, client_ip(request, settings.netlify_proxy_secret))
 
 
 @app.post("/chat", response_model=ChatResponse)

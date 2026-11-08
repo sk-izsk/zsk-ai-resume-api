@@ -77,6 +77,26 @@ class ChatLimitTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 429)
 
+    def test_usage_reports_what_is_left_without_using_it(self):
+        self.ask("one?", {"answer": "ok", "blocked": False})
+
+        first = self.client.get("/usage").json()
+        second = self.client.get("/usage").json()
+
+        self.assertEqual(first["remaining"], 2)
+        self.assertEqual(second["remaining"], 2)
+        self.assertTrue(first["allowed"])
+        self.assertEqual(first["reset_in_seconds"], 3600)
+
+    def test_usage_shows_zero_once_the_limit_is_reached(self):
+        for question in ["one?", "two?", "three?"]:
+            self.ask(question, {"answer": "ok", "blocked": False})
+
+        usage = self.client.get("/usage").json()
+
+        self.assertEqual(usage["remaining"], 0)
+        self.assertFalse(usage["allowed"])
+
     def test_the_fourth_real_answer_is_refused(self):
         for question in ["one?", "two?", "three?"]:
             self.ask(question, {"answer": "ok", "blocked": False})
