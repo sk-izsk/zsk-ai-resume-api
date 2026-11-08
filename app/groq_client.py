@@ -5,6 +5,9 @@ from groq import AsyncGroq, RateLimitError
 
 from app.config import Settings
 
+# Two providers in a row must still answer inside the site's 30 s request timeout.
+PROVIDER_TIMEOUT_SECONDS = 12
+
 
 SYSTEM_PROMPT = """
 # ROLE : 
@@ -71,26 +74,52 @@ def retry_after_seconds(message: str) -> int | None:
     return int(hours) * 3600 + int(minutes) * 60 + int(float(seconds))
 
 
+MAX_PROJECTS = 4
+_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "do", "for", "he", "his", "in", "is", "it", "me", "my", "of",
+    "on", "or", "the", "to", "what", "which", "does", "has", "have", "with", "about", "your", "this", "that",
+    "best", "most", "zeeshan", "zeeshan's", "show", "tell", "built", "project", "projects", "work", "good",
+}
+
+
+def _words(text: str) -> set[str]:
+    return {word for word in re.findall(r"[a-z0-9+#.]+", text.lower()) if len(word) > 1 and word not in _STOPWORDS}
+
+
+def _relevant_projects(projects: list[dict], message: str) -> list[dict]:
+    # ponytail: keyword overlap, not embeddings; fine for 14 projects, swap for embeddings if the list gets big.
+    asked = _words(message)
+
+    def score(project: dict) -> int:
+        text = " ".join(
+            [str(project.get(key, "")) for key in ("title", "category", "excerpt")] + project.get("tags", [])
+        )
+        return len(asked & _words(text))
+
+    # sorted() is stable, so ties keep the profile's own order (newest/featured first).
+    return sorted(projects, key=score, reverse=True)[:MAX_PROJECTS]
+
+
 def compact_profile(profile: dict, message: str) -> dict:
+    """Only what this question needs, so each request stays well under the providers' token limits."""
     text = message.lower()
     wants_blog = _matches_any(text, ["blog", "article", "writing", "hashnode"])
     wants_education = _matches_any(text, ["education", "degree", "master", "bootcamp", "school"])
     wants_contact = _matches_any(text, ["contact", "email", "linkedin", "github", "reach"])
+    wants_stack = _matches_any(text, ["skill", "stack", "tech", "know", "tool", "framework", "librar", "language"])
+    skills = profile.get("skills", {})
 
     compact = {
         "identity": profile.get("identity", {}),
-        "summary": profile.get("summary", {}),
-        "skills": {
-            "technical": profile.get("skills", {}).get("technical", []),
-            "categories": profile.get("skills", {}).get("categories", {}),
-        },
+        "summary": profile.get("summary", {}).get("short", ""),
+        "skill_ratings": [f"{item.get('name')}: {item.get('level')}" for item in skills.get("technical", [])],
         "professional_experience": [
             {
                 "company": item.get("company"),
                 "position": item.get("position"),
                 "duration": item.get("duration"),
                 "description": item.get("description"),
-                "highlights": item.get("highlights", [])[:4],
+                "highlights": item.get("highlights", [])[:3],
             }
             for item in profile.get("experience", [])
         ],
@@ -98,13 +127,16 @@ def compact_profile(profile: dict, message: str) -> dict:
             {
                 "title": item.get("title"),
                 "category": item.get("category"),
-                "tags": item.get("tags", [])[:10],
+                "tags": item.get("tags", [])[:8],
                 "excerpt": item.get("excerpt"),
-                "highlights": item.get("highlights", [])[:2],
+                "highlights": item.get("highlights", [])[:1],
             }
-            for item in profile.get("projects", [])
+            for item in _relevant_projects(profile.get("projects", []), message)
         ],
     }
+
+    if wants_stack:
+        compact["skill_categories"] = skills.get("categories", {})
 
     if wants_blog:
         compact["blog"] = [
@@ -126,7 +158,8 @@ def compact_profile(profile: dict, message: str) -> dict:
 
 
 async def ask_groq(settings: Settings, profile: dict, message: str) -> dict:
-    client = AsyncGroq(api_key=settings.groq_api_key)
+    # No SDK retries: a rate-limited Groq waits up to a minute, so hand over to the other provider instead.
+    client = AsyncGroq(api_key=settings.groq_api_key, max_retries=0, timeout=PROVIDER_TIMEOUT_SECONDS)
     response = await client.chat.completions.create(
         model=settings.groq_model,
         messages=[

@@ -23,8 +23,20 @@ class CompactProfileTest(unittest.TestCase):
         self.assertNotIn("blog", compact)
         self.assertNotIn("education", compact)
         self.assertNotIn("contact", compact)
-        self.assertEqual(len(compact["professional_experience"][0]["highlights"]), 4)
-        self.assertEqual(len(compact["portfolio_projects"][0]["tags"]), 10)
+        self.assertNotIn("skill_categories", compact)
+        self.assertEqual(compact["skill_ratings"], ["React: None"])
+        self.assertEqual(len(compact["professional_experience"][0]["highlights"]), 3)
+        self.assertEqual(len(compact["portfolio_projects"][0]["tags"]), 8)
+
+    def test_sends_only_the_projects_that_match_the_question(self):
+        projects = [{"title": f"Plain {i}", "tags": ["CSS"]} for i in range(6)]
+        projects.append({"title": "Smart AI", "tags": ["OpenAI"], "category": "AI Engineering"})
+        profile = {"projects": projects}
+
+        titles = [p["title"] for p in compact_profile(profile, "What AI projects has he built?")["portfolio_projects"]]
+
+        self.assertEqual(len(titles), 4)
+        self.assertEqual(titles[0], "Smart AI")
 
     def test_parses_groq_retry_after_seconds(self):
         self.assertEqual(retry_after_seconds("Please try again in 2h3m4.5s."), 7384)

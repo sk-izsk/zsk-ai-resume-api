@@ -8,8 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     groq_api_key: str = Field(..., alias="GROQ_API_KEY")
     groq_model: str = Field("openai/gpt-oss-120b", alias="GROQ_MODEL")
-    # Switches primary/fallback order: groq -> Google fallback, google -> Groq fallback.
-    primary_llm_provider: Literal["groq", "google"] = Field("groq", alias="PRIMARY_LLM_PROVIDER")
+    # Gemini answers first and Groq is the fallback; set PRIMARY_LLM_PROVIDER=groq to swap them.
+    primary_llm_provider: Literal["groq", "google"] = Field("google", alias="PRIMARY_LLM_PROVIDER")
     google_api_key: str | None = Field(None, alias="GOOGLE_API_KEY")
     google_model: str = Field("gemini-3.6-flash", alias="GOOGLE_MODEL")
     upstash_redis_rest_url: str = Field(..., alias="UPSTASH_REDIS_REST_URL")
@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     allowed_origins: str = Field("http://localhost:2222", alias="ALLOWED_ORIGINS")
     rate_limit_max_requests: int = Field(3, alias="RATE_LIMIT_MAX_REQUESTS")
     rate_limit_window_seconds: int = Field(3600, alias="RATE_LIMIT_WINDOW_SECONDS")
+    # Off-topic questions don't use up answers, but still cost tokens, so they get their own higher cap.
+    rate_limit_max_refusals: int = Field(10, alias="RATE_LIMIT_MAX_REFUSALS")
     cache_ttl_seconds: int = Field(604800, alias="CACHE_TTL_SECONDS")
     rate_limit_enabled: bool = Field(True, alias="RATE_LIMIT_ENABLED")
     cache_version: str = Field("professional-first-v2", alias="CACHE_VERSION")

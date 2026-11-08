@@ -3,7 +3,7 @@ import logging
 from typing import Literal
 
 from app.config import Settings
-from app.groq_client import SYSTEM_PROMPT, ask_groq, compact_profile
+from app.groq_client import PROVIDER_TIMEOUT_SECONDS, SYSTEM_PROMPT, ask_groq, compact_profile
 
 ProviderName = Literal["groq", "google"]
 
@@ -37,7 +37,10 @@ async def ask_google(settings: Settings, profile: dict, message: str) -> dict:
 
     client = genai.Client(
         api_key=settings.google_api_key,
-        http_options=types.HttpOptions(timeout=30_000),
+        http_options=types.HttpOptions(
+            timeout=PROVIDER_TIMEOUT_SECONDS * 1000,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
     )
     try:
         chat = client.aio.chats.create(
