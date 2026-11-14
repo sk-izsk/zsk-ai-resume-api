@@ -85,25 +85,15 @@ class RateLimitTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(fourth.allowed)
         self.assertEqual(fourth.reset_in_seconds, 3600)
 
-    async def test_refusals_and_failures_leave_answers_alone(self):
+    async def test_refusals_use_a_request_but_failures_do_not(self):
         settings, redis = make_settings(), FakeRedis()
 
         await ask(redis, settings, "refusal")
         await ask(redis, settings, "failed")
         state = await ask(redis, settings, "answer")
 
-        self.assertEqual(state.remaining, 2)
-        self.assertEqual(redis.values, {"rate:127.0.0.1": 1, "rate-refusal:127.0.0.1": 1})
-
-    async def test_refusals_have_their_own_higher_cap(self):
-        settings, redis = make_settings(RATE_LIMIT_MAX_REFUSALS=10), FakeRedis()
-
-        for _ in range(10):
-            self.assertTrue((await ask(redis, settings, "refusal")).remaining == 3)
-        eleventh = await reserve_request(redis, settings, "127.0.0.1")
-
-        self.assertFalse(eleventh.allowed)
-        self.assertEqual(eleventh.remaining, 3)
+        self.assertEqual(state.remaining, 1)
+        self.assertEqual(redis.values, {"rate:127.0.0.1": 2})
 
     async def test_a_parallel_burst_cannot_pass_the_limit(self):
         settings, redis = make_settings(), FakeRedis()
