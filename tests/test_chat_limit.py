@@ -19,7 +19,7 @@ async def no_profile(settings):
 
 
 class ChatLimitTest(unittest.TestCase):
-    """Only real answers use up one of the visitor's requests."""
+    """Any LLM reply, refusals included, uses up one of the visitor's requests; failures don't."""
 
     def setUp(self):
         patches = [
@@ -47,20 +47,20 @@ class ChatLimitTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["remaining"], 2)
 
-    def test_off_topic_refusals_and_failures_are_free(self):
+    def test_off_topic_refusals_use_a_request_but_failures_are_free(self):
         refused = self.ask("poem?", {"answer": "This is outside my expertise.", "blocked": True})
         failed = self.ask("react?", error=LLMUnavailableError("down"))
         answered = self.ask("skills?", {"answer": "React and TypeScript.", "blocked": False})
 
-        self.assertEqual(refused.json()["remaining"], 3)
+        self.assertEqual(refused.json()["remaining"], 2)
         self.assertEqual(failed.status_code, 503)
-        self.assertEqual(answered.json()["remaining"], 2)
+        self.assertEqual(answered.json()["remaining"], 1)
 
-    def test_a_refusal_the_model_forgot_to_flag_is_still_free(self):
+    def test_a_refusal_the_model_forgot_to_flag_still_uses_a_request(self):
         response = self.ask("pasta?", {"answer": "This is outside my expertise. I can only answer...", "blocked": False})
 
         self.assertTrue(response.json()["blocked"])
-        self.assertEqual(response.json()["remaining"], 3)
+        self.assertEqual(response.json()["remaining"], 2)
 
     def test_an_unexpected_error_gives_the_slot_back(self):
         failed = self.ask("react?", error=RuntimeError("profile fetch broke"))
@@ -69,11 +69,11 @@ class ChatLimitTest(unittest.TestCase):
         self.assertEqual(failed.status_code, 500)
         self.assertEqual(answered.json()["remaining"], 2)
 
-    def test_too_many_refusals_are_refused(self):
-        for index in range(10):
+    def test_the_fourth_refusal_is_rate_limited(self):
+        for index in range(3):
             self.ask(f"poem {index}?", {"answer": "Outside my expertise.", "blocked": True})
 
-        response = self.ask("poem 11?", {"answer": "Outside my expertise.", "blocked": True})
+        response = self.ask("poem 4?", {"answer": "Outside my expertise.", "blocked": True})
 
         self.assertEqual(response.status_code, 429)
 

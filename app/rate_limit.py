@@ -1,9 +1,8 @@
-"""Per-IP limits: a few real answers per window, and a higher cap on off-topic refusals.
+"""Per-IP limits: a few replies per window (answers and off-topic refusals both count).
 
 Every request reserves one slot in both counters before the AI is called, using atomic INCR, so a
 burst of parallel requests can never get past a limit. Once the reply is known, the slot it didn't
-use is handed back with DECR: an answer keeps its answer slot, a refusal keeps its refusal slot,
-and a failure keeps neither.
+use is handed back with DECR: an answer or a refusal keeps its answer slot, and a failure keeps neither.
 """
 
 import logging
@@ -130,7 +129,9 @@ async def settle_request(redis: RedisClient, settings: Settings, ip: str, outcom
 
     unused = {
         "answer": [_refusal_key(ip)],
-        "refusal": [_answer_key(ip)],
+        # ponytail: a refusal is a real LLM reply, so it uses an attempt like an answer; the refusal cap
+        # is now unreachable below the answer limit, remove it if you don't plan to raise the caps.
+        "refusal": [_refusal_key(ip)],
         "failed": [_answer_key(ip), _refusal_key(ip)],
     }[outcome]
     answers, ttl = await _release(redis, unused, _answer_key(ip))

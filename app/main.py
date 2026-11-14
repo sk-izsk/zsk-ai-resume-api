@@ -94,7 +94,7 @@ async def chat(payload: ChatRequest, request: Request, response: Response) -> Ch
             },
         )
 
-    # Only real answers use up a request; refusals use the refusal cap and failures use neither.
+    # Any LLM reply (answer or off-topic refusal) uses up a request; only failures give it back.
     outcome: Outcome = "failed"
     try:
         chat_response = await answer_question(payload.message)

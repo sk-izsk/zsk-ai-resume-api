@@ -97,8 +97,8 @@ CACHE_VERSION=professional-first-v2
 
 ## Rate limiting and the visitor's IP
 
-Each IP gets `RATE_LIMIT_MAX_REQUESTS` real answers and `RATE_LIMIT_MAX_REFUSALS` off-topic refusals per
-`RATE_LIMIT_WINDOW_SECONDS`. Failed replies don't count.
+Each IP gets `RATE_LIMIT_MAX_REQUESTS` replies per `RATE_LIMIT_WINDOW_SECONDS`. Off-topic refusals count as
+replies; only failed requests (503 and other errors) don't.
 
 The API never trusts `X-Forwarded-For`, which any client can set. It uses Cloudflare's `CF-Connecting-IP`
 (Render sits behind Cloudflare), or, for requests through the site's Netlify proxy, Netlify's
